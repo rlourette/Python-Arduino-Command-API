@@ -7,14 +7,15 @@ def Blink(led_pin, baud, port=""):
     """
     Blinks an LED in 1 sec intervals
     """
-    board = Arduino(baud, port=port)
+    board = Arduino(baud, port=port, timeout=5)
+    # time.sleep(1)
     board.pinMode(led_pin, "OUTPUT")
     while True:
         board.digitalWrite(led_pin, "LOW")
-        print board.digitalRead(led_pin)  # confirm LOW (0)
+        print(board.digitalRead(led_pin))  # confirm LOW (0)
         time.sleep(1)
         board.digitalWrite(led_pin, "HIGH")
-        print board.digitalRead(led_pin)  # confirm HIGH (1)
+        print(board.digitalRead(led_pin))  # confirm HIGH (1)
         time.sleep(1)
 
 
@@ -43,7 +44,7 @@ def adjustBrightness(pot_pin, led_pin, baud, port=""):
     while True:
         time.sleep(0.01)
         val = board.analogRead(pot_pin) / 4
-        print val
+        print(val)
         board.analogWrite(led_pin, val)
 
 
@@ -58,7 +59,7 @@ def PingSonar(pw_pin, baud, port=""):
         duration = board.pulseIn(pingPin, "HIGH")
         inches = duration / 72. / 2.
         # cent = duration / 29. / 2.
-        print inches, "inches"
+        print(inches, "inches")
         time.sleep(0.1)
 
 
@@ -73,4 +74,4 @@ def LCD(tx, baud, ssbaud, message, port=""):
         board.SoftwareSerial.write(" test ")
 
 if __name__ == "__main__":
-    Blink(13, '9600')
+    Blink(4, '9600', port="com3")
