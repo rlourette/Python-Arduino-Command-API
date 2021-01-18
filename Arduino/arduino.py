@@ -84,7 +84,7 @@ def find_port(baud, timeout):
 
 
 def get_version(sr):
-    cmd_str = build_cmd_str(b"version")
+    cmd_str = build_cmd_str("ve") # version
     if True: # try:
         sr.write(cmd_str)
         sr.flush()
@@ -108,7 +108,7 @@ class Arduino(object):
             else:
                 sr = serial.Serial(port, baud, timeout=timeout)
                 # print(sr.get_settings())
-                time.sleep(2)
+                time.sleep(2) # this seems to be needed while the Arduino initializes
         sr.flush()
         self.sr = sr
         self.sr.write(b'!!!')
@@ -156,7 +156,8 @@ class Arduino(object):
             val = 255
         elif val < 0:
             val = 0
-        cmd_str = build_cmd_str(b"aw", (pin, val))
+        cmd_str = build_cmd_str("aw", (pin, val))
+        # print("analogWrite: " + str(cmd_str))
         if True: # try:
             self.sr.write(cmd_str)
             self.sr.flush()
@@ -172,7 +173,7 @@ class Arduino(object):
         returns:
            value: integer from 1 to 1023
         """
-        cmd_str = build_cmd_str(b"ar", (pin,))
+        cmd_str = build_cmd_str("ar", (pin,))
         if True: # try:
             self.sr.write(cmd_str)
             self.sr.flush()
@@ -360,7 +361,7 @@ class Arduino(object):
                     self.sr.flush()
                 # except:
                 #     pass
-                cmd_str = build_cmd_str("nto", [pin])
+                cmd_str = build_cmd_str("tn", [pin]) # nto
                 if True: # # try:
                     self.sr.write(cmd_str)
                     self.sr.flush()
@@ -384,7 +385,7 @@ class Arduino(object):
         will short circuit the pin, potentially damaging
         the Arduino/Shrimp and any hardware attached to the pin.
         '''
-        cmd_str = build_cmd_str("cap", (pin,))
+        cmd_str = build_cmd_str("ca", (pin,)) # cap
         self.sr.write(cmd_str)
         rd = self.sr.readline().strip()
         if rd.isdigit():
@@ -454,7 +455,7 @@ class Servos(object):
         self.servo_pos = {}
 
     def attach(self, pin, min=544, max=2400):
-        cmd_str = build_cmd_str("sva", (pin, min, max))
+        cmd_str = build_cmd_str("va", (pin, min, max)) # sva
 
         while True:
             self.sr.write(cmd_str)
@@ -471,7 +472,7 @@ class Servos(object):
 
     def detach(self, pin):
         position = self.servo_pos[pin]
-        cmd_str = build_cmd_str("svd", (position,))
+        cmd_str = build_cmd_str("vd", (position,)) #svd
         if True: # try:
             self.sr.write(cmd_str)
             self.sr.flush()
@@ -481,14 +482,14 @@ class Servos(object):
 
     def write(self, pin, angle):
         position = self.servo_pos[pin]
-        cmd_str = build_cmd_str("svw", (position, angle))
+        cmd_str = build_cmd_str("vw", (position, angle)) # svw
 
         self.sr.write(cmd_str)
         self.sr.flush()
 
     def writeMicroseconds(self, pin, uS):
         position = self.servo_pos[pin]
-        cmd_str = build_cmd_str("svwm", (position, uS))
+        cmd_str = build_cmd_str("vu", (position, uS)) # svwm
 
         self.sr.write(cmd_str)
         self.sr.flush()
@@ -497,7 +498,7 @@ class Servos(object):
         if pin not in self.servo_pos.keys():
             self.attach(pin)
         position = self.servo_pos[pin]
-        cmd_str = build_cmd_str("svr", (position,))
+        cmd_str = build_cmd_str("vr", (position,)) # svr
         if True: # :
             self.sr.write(cmd_str)
             self.sr.flush()
@@ -609,19 +610,19 @@ class EEPROM(object):
             value = 255
         elif value < 0:
             value = 0
-        cmd_str = build_cmd_str("eewr", (address, value))
+        cmd_str = build_cmd_str("ew", (address, value)) #eewr
         if True: # try:
             self.sr.write(cmd_str)
             self.sr.flush()
         # except:
         #     pass
     
-    def read(self, adrress):
+    def read(self, address):
         """ Reads a byte from the EEPROM.
         
         :address: the location to write to, starting from 0 (int)
         """
-        cmd_str = build_cmd_str("eer", (adrress,))
+        cmd_str = build_cmd_str("er", (address,)) # eer
         if True: # try:
             self.sr.write(cmd_str)
             self.sr.flush()            
