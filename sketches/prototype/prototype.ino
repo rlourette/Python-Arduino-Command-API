@@ -122,17 +122,14 @@ void ToneNo(String data){
 void DigitalHandler(int mode, String data){
     int pin = Str2int(data);
     if(mode<=0){ //read
-      //Serial.println("FooBar");
         Serial.println(digitalRead(pin));
     }
     else{
-        //Serial.println("GotHere");
         if(pin <0){
             digitalWrite(-pin,LOW);
         }else{
             digitalWrite(pin,HIGH);
         }
-        //Serial.println('0');
     }
 }
 
@@ -141,10 +138,16 @@ void AnalogHandler(int mode, String data){
         int pin = Str2int(data);
         Serial.println(analogRead(pin));
     }else{
+        // b'%aw4%236$!'
+        // b'%aw4%129$!'
+        // b'%aw4%23$!'
         String sdata[2];
         split(sdata,2,data,'%');
+        //Serial.println(data);
         int pin = Str2int(sdata[0]);
         int pv = Str2int(sdata[1]);
+        //Serial.println(pin);
+        //Serial.println(pv);
         analogWrite(pin,pv);
     }
 }
@@ -321,106 +324,117 @@ void EEPROMHandler(int mode, String data) {
 
 void SerialParser(void) {
   char readChar[64]={0x0};
-  Serial.readBytesUntil(33,readChar,64);
-  String read_ = String(readChar);
-  //Serial.println(read_);
+  int numread = Serial.readBytesUntil(33,readChar,64);
+  if (numread <= 0) return;
+
+  // Find the command
+  int cmd = 0;
+  int i;
+  for (i = 0; i<numread; i++)
+  {
+    if (readChar[i] == '%')
+    {
+      cmd = readChar[++i]<<8 | readChar[++i];
+      break;
+    }
+  }
+
+  if (cmd == 0) return;
+
+  // parse the payload portion of the command
+  String data;
+  if (readChar[--numread] == '$')
+  {
+    readChar[numread]=0; // null terminate
+    data = String(readChar + ++i);
+  }
+  else
+  {
+    return;
+  }
+  
   // example '%dr6$!'
-  // example '%pm4$!%dw4$!'
+  // example '%dw4$!'
   // example '%pm4$!%dw4$!%dw-4$!%dw4$!%dw-4$!%dw4$!%dw-4$!%dw4$!%dw-4$!'
   // example '%dr6$!'
-  int idx1 = read_.indexOf('%');
-  int idx2 = read_.indexOf('$');
-  //char buf[20];
-  //sprintf(buf,"indx1=%d indx2=%d", idx1, idx2);
-  //Serial.println(buf);
-  // separate command from associated data
-  if ((idx1 < 0) || (idx2 < 0)) return;
-  String cmd = read_.substring(idx1+1, idx1+3);
-  String data = read_.substring(idx1+3,idx2);
-  
-  //char buf[20];
-  //Serial.print("cmd=");
-  //Serial.print(cmd);
-  //Serial.print(" ");
-  //Serial.print("data=");
-  //Serial.println(data);
-  //sprintf(buf,"cmd=%s data=%s", cmd, data);
-  //Serial.println(buf);
-  //Serial.println("got here");
-  
   // determine command sent
-  if (cmd == "dw") {
-      DigitalHandler(1, data);   
-  }
-  else if (cmd == "dr") {
-      DigitalHandler(0, data);   
-  }  
-  else if (cmd == "aw") {
-      AnalogHandler(1, data);   
-  }    
-  else if (cmd == "ar") {
-      AnalogHandler(0, data);   
-  }      
-  else if (cmd == "pm") {
-      //Serial.println("got pm");
-      ConfigurePinHandler(data);   
-  }    
-  else if (cmd == "ps") {
-      pulseInSHandler(data);   
-  }    
-  else if (cmd == "pi") {
-      pulseInHandler(data);   
-  }        
-  else if (cmd == "ss") {
-      SS_set(data);   
-  }
-  else if (cmd == "sw") {
-      SS_write(data);   
-  }
-  else if (cmd == "sr") {
-      SS_read(data);   
-  }    
-  else if (cmd == "sva") {
-      SV_add(data);   
-  }      
-  else if (cmd == "svr") {
-      SV_read(data);   
-  }   
- else if (cmd == "svw") {
-      SV_write(data);   
-  }    
- else if (cmd == "svwm") {
-      SV_write_ms(data);   
-  }      
-  else if (cmd == "svd") {
-      SV_remove(data);   
-  } 
-  else if (cmd == "version") {
-      Version();   
-  }
-  else if (cmd == "to") {
-      Tone(data);   
-  } 
-  else if (cmd == "nto") {
-      ToneNo(data);   
-  }  
-  else if (cmd == "cap") {
-      readCapacitivePin(data);   
-  }
-  else if (cmd == "so") {
+
+  switch (cmd)
+  {
+    case int('dw'):
+      DigitalHandler(1, data);
+      break;
+    case int('dr'):
+      DigitalHandler(0, data);
+      break;
+    case int('aw'):
+      AnalogHandler(1, data);
+      break;
+    case int('ar'):
+      AnalogHandler(0, data);
+      break;
+    case int('pm'):
+      ConfigurePinHandler(data);
+      break;
+    case int('ps'):
+      pulseInSHandler(data);
+      break;
+    case int('pi'):
+      pulseInHandler(data);
+      break;
+    case int('ss'):
+      SS_set(data);
+      break;
+    case int('sw'):
+      SS_write(data);
+      break;
+    case int('sr'):
+      SS_read(data);
+      break;
+    case int('va'):
+      SV_add(data);
+      break;
+    case int('vr'):
+      SV_read(data);
+      break;
+    case int('vw'):
+      SV_write(data);
+      break;
+    case int('vu'):
+      SV_write_ms(data);
+      break;
+    case int('vd'):
+      SV_remove(data);
+      break;
+    case int('ve'):
+      Version();
+      break;
+    case int('to'):
+      Tone(data);
+      break;
+    case int('tn'):
+      ToneNo(data);
+      break;
+    case int('ca'):
+      readCapacitivePin(data);
+      break;
+    case int('so'):
       shiftOutHandler(data);
-  }
-  else if (cmd == "si") {
+      break;
+    case int('si'):
       shiftInHandler(data);
-  }
-  else if (cmd == "eewr") {
-      EEPROMHandler(0, data);   
-  } 
-  else if (cmd == "eer") {
-      EEPROMHandler(1, data);   
-  }  
-  else if (cmd == "sz") {  
+      break;
+    case int('ew'):
+      EEPROMHandler(0, data);
+      break;
+    case int('er'):
+      EEPROMHandler(1, data);
+      break;
+    case int('sz'):  
       sizeEEPROM();
+      break;
+    default:
+      break;
   }  
 }
 
