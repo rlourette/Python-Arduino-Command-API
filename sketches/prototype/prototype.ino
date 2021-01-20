@@ -1,7 +1,8 @@
 #include <SoftwareSerial.h>
-#include <Wire.h>
+//#include <Wire.h>
 #include <Servo.h>
 #include <EEPROM.h>
+#include <string.h>
 
 SoftwareSerial *sserial = NULL;
 Servo servos[8];
@@ -330,11 +331,11 @@ void SerialParser(void) {
   // Find the command
   int cmd = 0;
   int i;
-  for (i = 0; i<numread; i++)
+  for (i = 0; i<numread;)
   {
-    if (readChar[i] == '%')
+    if (readChar[i++] == '%')
     {
-      cmd = readChar[++i]<<8 | readChar[++i];
+      cmd = readChar[i++]<<8 | readChar[i++];
       break;
     }
   }
@@ -346,7 +347,7 @@ void SerialParser(void) {
   if (readChar[--numread] == '$')
   {
     readChar[numread]=0; // null terminate
-    data = String(readChar + ++i);
+    data = String(readChar + i);
   }
   else
   {
