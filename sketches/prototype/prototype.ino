@@ -9,29 +9,61 @@ Servo servos[8];
 int servo_pins[] = {0, 0, 0, 0, 0, 0, 0, 0};
 boolean connected = false;
 
-int Str2int (String Str_value)
+char* parseparams(char* data, char* sdata[], int numexpected)
 {
-  char buffer[10]; //max length is three units
-  Str_value.toCharArray(buffer, 10);
-  int int_value = atoi(buffer);
-  return int_value;
+  char* retval = data;
+  numexpected--;
+  for (int i = 0; i < numexpected; i++)
+  {
+    sdata[i] = data;
+    data = strchr(data,'%');
+    if (NULL == data) return NULL;
+    *(data++) = 0; // null terminate param and point to start of next
+  }
+  // last one is different since data is null terminated already
+  sdata[numexpected] = data;
+  
+  return retval;
 }
 
-void split(String results[], int len, String input, char spChar) {
-  String temp = input;
-  for (int i=0; i<len; i++) {
-    int idx = temp.indexOf(spChar);
-    results[i] = temp.substring(0,idx);
-    temp = temp.substring(idx+1);
+char* parsevarlenparams(char* data, char* sdata[], int numexpected)
+{
+  //  data = "8%9%262%4%196%8%196%8%220%4%196%4%None%4%247%4%262%4$!";
+  //Serial.print("(int)data = "); Serial.println((int)data);
+  char* retval = data;
+  numexpected--;
+
+  for (int i = 0; i < numexpected; i++)
+  {
+    sdata[i] = data;
+    data = strchr(data,'%');
+
+    if (NULL == data) return NULL;
+    *(data++) = 0; // null terminate param and point to start of next
   }
+  
+  // last one is different since it is either terminated with null or '%'
+  sdata[numexpected] = data;
+  char terminator;
+  while (true)
+  {
+    terminator = *(data++);
+    if (terminator == 0) break;
+    if (terminator == '%')
+    {
+      retval = data;
+      break;
+    }
+  }
+  return retval;
 }
 
 void Version(){
   Serial.println("version");
 }
 
-uint8_t readCapacitivePin(String data) {
-  int pinToMeasure = Str2int(data);
+uint8_t readCapacitivePin(char* data) {
+  int pinToMeasure = atoi(data);
   // readCapacitivePin
   //  Input: Arduino pin number
   //  Output: A number, from 0 to 17 expressing
@@ -95,33 +127,55 @@ uint8_t readCapacitivePin(String data) {
   Serial.println(cycles);
 }
 
-void Tone(String data){
-  int idx = data.indexOf('%');
-  int len = Str2int(data.substring(0,idx));
-  String data2 = data.substring(idx+1);
-  int idx2 = data2.indexOf('%');
-  int pin = Str2int(data2.substring(0,idx2));
-  String data3 = data2.substring(idx2+1);
-  String melody[len*2];
-  split(melody,len*2,data3,'%');
+void Tone(char* data)
+{
+  // notes of the moledy followed by the duration.
+  // a 4 means a quarter note, 8 an eighteenth , 16 sixteenth, so on
+  // !!negative numbers are used to represent dotted notes,
+  // so -4 means a dotted quarter note, that is, a quarter plus an eighteenth!!
+  int retval=0;
+  // params are length, pin, (note, duration){length}
+  char* sdata[2];
+  char* next = parsevarlenparams(data, sdata, 2);
+  if ((NULL == next) || (data == next))
+  {
+    Serial.println(retval);
+    return;
+  }
+  
+  int numnotes = atoi(sdata[0]);
+  int pin = atoi(sdata[1]);
 
-  for (int thisNote = 0; thisNote < len; thisNote++) {
-    int noteDuration = 1000/Str2int(melody[thisNote+len]);
-    int note = Str2int(melody[thisNote]);
+  // parse the note|duration tuples and play them
+  for (retval = 0; retval < numnotes; retval++)
+  {
+    next = parsevarlenparams(next, sdata, 2);
+    if (NULL == next) break;
+    int note = atoi(sdata[0]); // non-integers parse to 0 (such as 'None')
+    int duration = atoi(sdata[1]);
+    if (duration < 0) // handle dotted notes
+    {
+      duration = -duration;
+      duration += duration >> 1;
+    }
+
+    int noteDuration = 1000/duration;
     tone(pin, note, noteDuration);
-    int pause = noteDuration * 1.30;
+    int pause = (int)(((long)noteDuration) * 13 / 10); // * 1.30;
     delay(pause);
     noTone(pin);
   }
-} 
+  Serial.println(retval);
+}
 
-void ToneNo(String data){
-  int pin = Str2int(data);
+
+void ToneNo(char* data){
+  int pin = atoi(data);
   noTone(pin);
 } 
 
-void DigitalHandler(int mode, String data){
-    int pin = Str2int(data);
+void DigitalHandler(int mode, char* data){
+    int pin = atoi(data);
     if(mode<=0){ //read
         Serial.println(digitalRead(pin));
     }
@@ -134,27 +188,30 @@ void DigitalHandler(int mode, String data){
     }
 }
 
-void AnalogHandler(int mode, String data){
+void AnalogHandler(int mode, char* data){
      if(mode<=0){ //read
-        int pin = Str2int(data);
+        int pin = atoi(data);
         Serial.println(analogRead(pin));
     }else{
         // b'%aw4%236$!'
         // b'%aw4%129$!'
         // b'%aw4%23$!'
-        String sdata[2];
-        split(sdata,2,data,'%');
-        //Serial.println(data);
-        int pin = Str2int(sdata[0]);
-        int pv = Str2int(sdata[1]);
-        //Serial.println(pin);
-        //Serial.println(pv);
-        analogWrite(pin,pv);
+        //String sdata[2];
+        char* sdata[2];
+        
+        //split(sdata,2,data,'%');
+        data = strchr(data, '%');
+        if (data) // return if not formatted properly
+        {
+          int pin = atoi(sdata[0]);
+          int pv = atoi(sdata[1]);
+          analogWrite(pin,pv);
+        }
     }
 }
 
-void ConfigurePinHandler(String data){
-    int pin = Str2int(data);
+void ConfigurePinHandler(char* data){
+    int pin = atoi(data);
     if(pin <=0){
         pinMode(-pin,INPUT);
     }else{
@@ -162,28 +219,34 @@ void ConfigurePinHandler(String data){
     }
 }
 
-void shiftOutHandler(String data) {    
-    String sdata[4];
-    split(sdata, 4, data, '%');
-    int dataPin = sdata[0].toInt();
-    int clockPin = sdata[1].toInt();
-    String bitOrderName = sdata[2];
-    byte value = (byte)(sdata[3].toInt());
-    if (bitOrderName == "MSBFIRST") {
+
+void shiftOutHandler(char* data) {    
+    char* sdata[4];
+    data = parseparams(data, sdata, 4);
+    if (NULL == data) return;
+    int dataPin = atoi(sdata[0]);
+    int clockPin = atoi(sdata[1]);
+    sdata[2]; // bit Order 'M' or 'L'
+    byte value = (byte) atoi(sdata[3]);
+    if (*sdata[2] == 'M') {
        shiftOut(dataPin, clockPin, MSBFIRST, value);
-    } else {
+    }
+    else
+    {
        shiftOut(dataPin, clockPin, LSBFIRST, value);
     }
 }
 
-void shiftInHandler(String data) {
-    String sdata[3];
-    split(sdata, 3, data, '%');
-    int dataPin = sdata[0].toInt();
-    int clockPin = sdata[1].toInt();
-    String bitOrderName = sdata[2];
+void shiftInHandler(char* data) {
+    char* sdata[3];
+    data = parseparams(data, sdata, 3);
+    if (NULL == data) return;
+    
+    int dataPin = atoi(sdata[0]);
+    int clockPin = atoi(sdata[1]);
+    
     int incoming;
-    if (bitOrderName == "MSBFIRST") {
+    if (*sdata[2] == 'M') {
        incoming = (int)shiftIn(dataPin, clockPin, MSBFIRST);
     } else {
        incoming = (int)shiftIn(dataPin, clockPin, LSBFIRST);
@@ -191,32 +254,32 @@ void shiftInHandler(String data) {
     Serial.println(incoming);
 }
 
-void SS_set(String data){
+void SS_set(char* data){
   delete sserial;
-  String sdata[3];
-  split(sdata,3,data,'%');
-  int rx_ = Str2int(sdata[0]);
-  int tx_ = Str2int(sdata[1]);
-  int baud_ = Str2int(sdata[2]);
+  char* sdata[3];
+  data = parseparams(data, sdata, 3);
+  if (NULL == data) return;
+  
+  int rx_ = atoi(sdata[0]);
+  int tx_ = atoi(sdata[1]);
+  int baud_ = atoi(sdata[2]);
   sserial = new SoftwareSerial(rx_, tx_);
   sserial->begin(baud_);
   Serial.println("ss OK");
 }
 
-void SS_write(String data) {
- int len = data.length()+1;
- char buffer[len];
- data.toCharArray(buffer,len);
+void SS_write(char* data) {
+ sserial->write(data); 
  Serial.println("ss OK");
- sserial->write(buffer); 
 }
-void SS_read(String data) {
+
+void SS_read(/*String data*/) {
  char c = sserial->read(); 
  Serial.println(c);
 }
 
-void pulseInHandler(String data){
-    int pin = Str2int(data);
+void pulseInHandler(char* data){
+    int pin = atoi(data);
     long duration;
     if(pin <=0){
           pinMode(-pin, INPUT);
@@ -228,8 +291,8 @@ void pulseInHandler(String data){
     Serial.println(duration);
 }
 
-void pulseInSHandler(String data){
-    int pin = Str2int(data);
+void pulseInSHandler(char* data){
+    int pin = atoi(data);
     long duration;
     if(pin <=0){
           pinMode(-pin, OUTPUT);
@@ -253,12 +316,13 @@ void pulseInSHandler(String data){
     Serial.println(duration);
 }
 
-void SV_add(String data) {
-    String sdata[3];
-    split(sdata,3,data,'%');
-    int pin = Str2int(sdata[0]);
-    int min = Str2int(sdata[1]);
-    int max = Str2int(sdata[2]);
+void SV_add(char* data) {
+    char* sdata[3];
+    data = parseparams(data, sdata, 3);
+    if (NULL == data) return;
+    int pin = atoi(sdata[0]);
+    int min = atoi(sdata[1]);
+    int max = atoi(sdata[2]);
     int pos = -1;
     for (int i = 0; i<8;i++) {
         if (servo_pins[i] == pin) { //reset in place
@@ -280,32 +344,34 @@ void SV_add(String data) {
         }
 }
 
-void SV_remove(String data) {
-    int pos = Str2int(data);
+void SV_remove(char* data) {
+    int pos = atoi(data);
     servos[pos].detach();
     servo_pins[pos] = 0;
 }
 
-void SV_read(String data) {
-    int pos = Str2int(data);
+void SV_read(char* data) {
+    int pos = atoi(data);
     int angle;
     angle = servos[pos].read();
     Serial.println(angle);
 }
 
-void SV_write(String data) {
-    String sdata[2];
-    split(sdata,2,data,'%');
-    int pos = Str2int(sdata[0]);
-    int angle = Str2int(sdata[1]);
+void SV_write(char* data) {
+    char* sdata[2];
+    data = parseparams(data, sdata, 2);
+    if (NULL == data) return;
+    int pos = atoi(sdata[0]);
+    int angle = atoi(sdata[1]);
     servos[pos].write(angle);
 }
 
-void SV_write_ms(String data) {
-    String sdata[2];
-    split(sdata,2,data,'%');
-    int pos = Str2int(sdata[0]);
-    int uS = Str2int(sdata[1]);
+void SV_write_ms(char* data) {
+    char* sdata[2];
+    data = parseparams(data, sdata, 2);
+    if (NULL == data) return;
+    int pos = atoi(sdata[0]);
+    int uS = atoi(sdata[1]);
     servos[pos].writeMicroseconds(uS);
 }
 
@@ -313,13 +379,14 @@ void sizeEEPROM() {
     Serial.println(E2END + 1);
 }
 
-void EEPROMHandler(int mode, String data) {
-    String sdata[2];
-    split(sdata, 2, data, '%');
+void EEPROMHandler(int mode, char* data) {
+    char* sdata[2];
+    data = parseparams(data, sdata, 2);
+    if (NULL == data) return;
     if (mode == 0) {  
-        EEPROM.write(Str2int(sdata[0]), Str2int(sdata[1]));  
+        EEPROM.write(atoi(sdata[0]), atoi(sdata[1]));  
     } else {
-        Serial.println(EEPROM.read(Str2int(sdata[0])));
+        Serial.println(EEPROM.read(atoi(sdata[0])));
     }
 }
 
@@ -343,93 +410,93 @@ void SerialParser(void) {
   if (cmd == 0) return;
 
   // parse the payload portion of the command
-  String data;
+  char* databuf;
   if (readChar[--numread] == '$')
   {
     readChar[numread]=0; // null terminate
-    data = String(readChar + i);
+    databuf = readChar + i;
   }
   else
   {
     return;
   }
-  
   // example '%dr6$!'
   // example '%dw4$!'
   // example '%pm4$!%dw4$!%dw-4$!%dw4$!%dw-4$!%dw4$!%dw-4$!%dw4$!%dw-4$!'
   // example '%dr6$!'
+  // example '%tO8%9%262%4%196%8%196%8%220%4%196%4%None%4%247%4%262%4$!'
   // determine command sent
 
   switch (cmd)
   {
     case int('dw'):
-      DigitalHandler(1, data);
+      DigitalHandler(1, databuf);
       break;
     case int('dr'):
-      DigitalHandler(0, data);
+      DigitalHandler(0, databuf);
       break;
     case int('aw'):
-      AnalogHandler(1, data);
+      AnalogHandler(1, databuf);
       break;
     case int('ar'):
-      AnalogHandler(0, data);
+      AnalogHandler(0, databuf);
       break;
     case int('pm'):
-      ConfigurePinHandler(data);
+      ConfigurePinHandler(databuf);
       break;
     case int('ps'):
-      pulseInSHandler(data);
+      pulseInSHandler(databuf);
       break;
     case int('pi'):
-      pulseInHandler(data);
+      pulseInHandler(databuf);
       break;
     case int('ss'):
-      SS_set(data);
+      SS_set(databuf);
       break;
     case int('sw'):
-      SS_write(data);
+      SS_write(databuf);
       break;
     case int('sr'):
-      SS_read(data);
+      SS_read(/*data*/);
       break;
     case int('va'):
-      SV_add(data);
+      SV_add(databuf);
       break;
     case int('vr'):
-      SV_read(data);
+      SV_read(databuf);
       break;
     case int('vw'):
-      SV_write(data);
+      SV_write(databuf);
       break;
     case int('vu'):
-      SV_write_ms(data);
+      SV_write_ms(databuf);
       break;
     case int('vd'):
-      SV_remove(data);
+      SV_remove(databuf);
       break;
     case int('ve'):
       Version();
       break;
     case int('to'):
-      Tone(data);
+      Tone(databuf);
       break;
     case int('tn'):
-      ToneNo(data);
+      ToneNo(databuf);
       break;
     case int('ca'):
-      readCapacitivePin(data);
+      readCapacitivePin(databuf);
       break;
     case int('so'):
-      shiftOutHandler(data);
+      shiftOutHandler(databuf);
       break;
     case int('si'):
-      shiftInHandler(data);
+      shiftInHandler(databuf);
       break;
     case int('ew'):
-      EEPROMHandler(0, data);
+      EEPROMHandler(0, databuf);
       break;
     case int('er'):
-      EEPROMHandler(1, data);
+      EEPROMHandler(1, databuf);
       break;
     case int('sz'):  
       sizeEEPROM();
